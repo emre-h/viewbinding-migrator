@@ -1,28 +1,32 @@
 fileName = 'MainActivity.java'
 
+bindingName = 'Activity' + fileName.split('Activity')[0] + 'Binding'
+
 with open(fileName, 'r') as codeClass:
     data = codeClass.read()
 
-    lines = data.replace("{","").replace("}","").split("\n")
-
-    onCreate = False
+    lines = data.split("\n")
 
     expressions = []
     views = []
     viewIDs = []
+    semicolonRowIndexes = []
+    semicolonColumnIndexes = []
+    willBeDeletedIndexes = []
 
-    for i in lines:
-        splitted = i.strip().split(";")
-        for e in splitted:
-            expressions.append(e.strip())
+    for n, i in enumerate(lines):
+        if ';' in i:
+            semicolonRowIndexes.append(n)
+            semicolonColumnIndexes.append(i.index(";"))
+        splittedVar = i.split(";")
+
+        for e in splittedVar:
+            expressions.append(e)
     
-
-    for j in expressions:
+    for n, j in enumerate(expressions):
 
         if "/" in j:
             continue
-
-        #print(j)
 
         if "findViewById" in j:
             assignment = j.split("=")
@@ -33,7 +37,26 @@ with open(fileName, 'r') as codeClass:
 
             viewIDs.append(viewID)
 
+            willBeDeletedIndexes.append(n)
 
-print(viewIDs)
+            expressions[n] = ''
 
-print(views)
+    for n, e in enumerate(expressions):
+        for view in views:
+            if ("findViewById" in e) or (view in e and (not '.' in e) and (not ')' in e) and (not '(' in e)):
+                expressions[n] = ''
+
+                willBeDeletedIndexes.append(n)
+      
+
+    for m, o in enumerate(semicolonRowIndexes):
+        if n in willBeDeletedIndexes:
+            continue
+        
+        if n == o:
+            e = expressions[o]
+            ind = semicolonColumnIndexes[m]
+            expressions[o] = e[:ind] + ';' + e[ind:]
+
+    for i in expressions:
+        print(i)
