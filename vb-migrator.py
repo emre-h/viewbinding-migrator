@@ -1,16 +1,23 @@
-fileName = 'MainActivity.java'
+import sys
+import os
+from fnmatch import fnmatch
 
-bindingName = 'Activity' + fileName.split('Activity')[0] + 'Binding'
+appPath = sys.argv[1]
+fileType = ".java"
 
-setContentView = "        binding = " + bindingName + ".inflate(getLayoutInflater());" + "\n        final View view = binding.getRoot();" + "\n        setContentView(view);"
+print(appPath)
 
-commentLines = False
-contentViewSet = False
-bindingLateInitVar = False
+for root, subdirs, files in os.walk(appPath):
+    for file in files:
+        if not file in subdirs:
+            if ".java" in file:
+                print(files)
+        
 
 def checkForClass(name):
     lower = False
     upper = False
+
     for letter in name:
         if not lower:
             lower = letter.islower()
@@ -19,9 +26,17 @@ def checkForClass(name):
 
     return lower and upper
 
+def refactorFile(fileName):
+    bindingName = 'Activity' + fileName.split('Activity')[0] + 'Binding'
 
-with open(fileName, 'r') as codeClass:
-    data = codeClass.read()
+    setContentView = "        binding = " + bindingName + ".inflate(getLayoutInflater());" + "\n        final View view = binding.getRoot();" + "\n        setContentView(view);"
+
+    commentLines = False
+    contentViewSet = False
+    bindingLateInitVar = False
+
+    with open(fileName, 'r') as codeClass:
+        data = codeClass.read()
 
     lines = data.split("\n")
 
@@ -80,5 +95,6 @@ with open(fileName, 'r') as codeClass:
                 lines[n] = lines[n].replace(view,"binding."+viewIDs[t])
 
     
-    for i in lines:
-        print(i)
+    
+    
+    return 1
