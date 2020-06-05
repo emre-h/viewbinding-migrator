@@ -1,6 +1,5 @@
 import sys
 import os
-from fnmatch import fnmatch
 
 appPath = sys.argv[1]
 fileType = ".java"
