@@ -25,18 +25,14 @@ with open(fileName, 'r') as codeClass:
 
     lines = data.split("\n")
 
-    expressions = []
     views = []
     viewIDs = []
-
-    for n, i in enumerate(lines):
-        expressions.append(i)
     
-    for n, j in enumerate(expressions):
+    for n, j in enumerate(lines):
 
         if not contentViewSet:
             if "setContentView" in j:
-                expressions[n] = setContentView
+                lines[n] = setContentView
 
         if "/*" in j:
             commentLines = True
@@ -68,21 +64,21 @@ with open(fileName, 'r') as codeClass:
 
             viewIDs.append(viewID.replace(";",""))
 
-            expressions[n] = ''
+            lines[n] = ''
 
-    for n, e in enumerate(expressions):
+    for n, e in enumerate(lines):
         for t, view in enumerate(views):
 
             if ("findViewById" in e) or (view in e and ((not '.' in e) and (not ')' in e) and (not '(' in e))):
                 if not bindingLateInitVar:
-                    expressions[n] = "    private " + bindingName + " binding;"
+                    lines[n] = "    private " + bindingName + " binding;"
                     bindingLateInitVar = True
                 else:
-                    expressions[n] = ''
+                    lines[n] = ''
 
             elif view in e and ('.' in e):
-                expressions[n] = expressions[n].replace(view,"binding."+viewIDs[t])
+                lines[n] = lines[n].replace(view,"binding."+viewIDs[t])
 
     
-    for i in expressions:
+    for i in lines:
         print(i)
