@@ -1,4 +1,4 @@
-import subprocess
+from subprocess import PIPE, Popen
 import sys
 import os
 
@@ -11,7 +11,7 @@ def fetchPackageName():
             if 'package=' in i:
                 return i.replace("package=\"","").replace("\">","").strip()
     
-return ''
+    return ''
 
 sourcePath = sys.argv[1]
 
@@ -27,10 +27,20 @@ packageName = fetchPackageName()
 
 bindingImport = "import " + packageName + ".databinding"
 
+generatedBindingFiles = getFiles(sourcePath + "/app/build/generated/data_binding_base_class_source_out/debug/out/" + packageName + "/databinding", True)
+
 javaFiles = []
 xmlFiles = []
 
-def getFiles(dirName):
+def cmdline(command):
+    process = Popen(
+        args=command,
+        stdout=PIPE,
+        shell=True
+    )
+    return process.communicate()[0]
+
+def getFiles(dirName, bindingMode):
     listOfFile = os.listdir(dirName)
     allFiles = list()
     # Iterate over all the entries
@@ -39,14 +49,15 @@ def getFiles(dirName):
         fullPath = os.path.join(dirName, entry)
         # If entry is a directory then get the list of files in this directory 
         if os.path.isdir(fullPath):
-            allFiles = allFiles + getFiles(fullPath)
+            allFiles = allFiles + getFiles(fullPath, False)
         else:
             allFiles.append(fullPath)
-            if javaFileType in fullPath:
-                javaFiles.append(fullPath)
+            if not bindingMode:
+                if javaFileType in fullPath:
+                    javaFiles.append(fullPath)
 
-            elif xmlFileType in fullPath and 'layout' in fullPath:
-                xmlFiles.append(fullPath)
+                elif xmlFileType in fullPath and 'layout' in fullPath:
+                    xmlFiles.append(fullPath)
                 
     return allFiles
 
@@ -62,12 +73,6 @@ def checkForClass(name):
 
     return lower and upper
 
-def gradleCleanTask()
-    # cd "/home/emre/Documents/cb-kopya" && chmod +x gradlew && ./gradlew clean
-    cleanCommand = "cd " + "\"" + sourcePath + "\"" " && chmod +x gradlew && ./gradlew clean"
-    print(cleanCommand)
-    return 0
-
 def varNameToCamelCase(name):
     if '_' in name:
         arr = name.split("_")
@@ -79,17 +84,20 @@ def refactorFile(fileName):
     pth = fileName.split("/")
     className = pth[len(pth)-1];
 
-    #   if className
-
-    bindingName = 'Activity' + className.split('Activity')[0] + 'Binding'
-
-    setContentView = "        binding = " + bindingName + ".inflate(getLayoutInflater());" + "\n        final View view = binding.getRoot();" + "\n        setContentView(view);"
-
     commentLines = False
     contentViewSet = False
 
     with open(fileName, 'r') as codeClass:
         data = codeClass.read()
+
+        bindingName = 'Activity' + className.split('Activity')[0] + 'Binding'
+
+        if not bindingName + ".java" in generatedBindingFiles:
+            if className + ".java" in generatedBindingFiles:
+                bindingName = className
+
+        setContentView = "        binding = " + bindingName + ".inflate(getLayoutInflater());" + "\n        final View view = binding.getRoot();" + "\n        setContentView(view);"
+
         activity = False
         fragment = False
         dialog = False
@@ -223,22 +231,50 @@ def writeFile(path, strlist):
 
     return 1
 
-getFiles(appPath)
- 
+getFiles(appPath, False)
+
+def doGradleTasks():
+    clean = "./gradlew clean &&"
+    build = "./gradlew assembleDebug"
+    baseCommand = "cd " + "\"" + sourcePath + "\"" " && chmod +x gradlew && "
+
+    print("Cleaning project...\n")
+    outClean = cmdline(baseCommand + clean)
+
+    if ('BUILD SUCCESSFUL' in outClean):
+        print("Project has been cleaned successfully\n")
+        print("Building project...")
+
+        outBuild = cmdline(baseCommand + build)
+
+        if ('BUILD SUCCESSFUL' in outBuild):
+             print("Project has been built successfully\n")
+             print("Refactoring Java files...\n")
+
+             return 1
+        else:
+            return 0
+    else:
+            return 0
+
+    
+
 for i in xmlFiles:
     result = removeIgnoreBinding(i)
 
     if result == 0:
+        print("Ignored XML file:" + i)
         continue
     else:
         writeFile(i,result)
         print("Refactored XML layout: " + i)
 
-for i in javaFiles:
-    result = refactorFile(i)
-    if result == 0:
-        print("-")
-        continue
-    else:
-        writeFile(i,result)
-        print("Refactored Java file: " + i)
+if doGradleTasks() == 1:
+    for i in javaFiles:
+        result = refactorFile(i)
+        if result == 0:
+            print("Ignored Java file:" + i)
+            continue
+        else:
+            writeFile(i,result)
+            print("Refactored Java file: " + i)
