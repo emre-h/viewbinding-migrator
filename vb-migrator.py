@@ -294,6 +294,4 @@ if doGradleTasks() == 1:
     for i in range(0,len(generatedBindingFiles)):
         generatedBindingFiles[i] = generatedBindingFiles[i].replace(sourcePath + "/app/build/generated/data_binding_base_class_source_out/debug/out/" + pkgPath + "databinding/","").replace(".java","")
 
-    print(generatedBindingFiles)
-
     refactorClasses()
