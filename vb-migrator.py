@@ -1,11 +1,31 @@
+import subprocess
 import sys
 import os
 
-appPath = sys.argv[1] + "/app/src/main"
+def fetchPackageName():
+    manifestPath = appPath + "/AndroidManifest.xml"
+    with open(manifestPath, 'r') as codeClass:
+        xmlArray = codeClass.read().split("\n")
+
+        for i in xmlArray:
+            if 'package=' in i:
+                return i.replace("package=\"","").replace("\">","").strip()
+    
+return ''
+
+sourcePath = sys.argv[1]
+
+appPath = sourcePath + "/app/src/main"
 
 javaFileType = ".java"
 xmlFileType = ".xml"
 ignoreText = "viewBindingIgnore=\"true\""
+
+viewImport = "import android.view.View;"
+
+packageName = fetchPackageName()
+
+bindingImport = "import " + packageName + ".databinding"
 
 javaFiles = []
 xmlFiles = []
@@ -42,23 +62,47 @@ def checkForClass(name):
 
     return lower and upper
 
+def gradleCleanTask()
+    # cd "/home/emre/Documents/cb-kopya" && chmod +x gradlew && ./gradlew clean
+    cleanCommand = "cd " + "\"" + sourcePath + "\"" " && chmod +x gradlew && ./gradlew clean"
+    print(cleanCommand)
+    return 0
+
+def varNameToCamelCase(name):
+    if '_' in name:
+        arr = name.split("_")
+        return arr[0] + arr[1].title()
+    else:
+        return name
+
 def refactorFile(fileName):
-    bindingName = 'Activity' + fileName.split('Activity')[0] + 'Binding'
+    pth = fileName.split("/")
+    className = pth[len(pth)-1];
+
+    #   if className
+
+    bindingName = 'Activity' + className.split('Activity')[0] + 'Binding'
 
     setContentView = "        binding = " + bindingName + ".inflate(getLayoutInflater());" + "\n        final View view = binding.getRoot();" + "\n        setContentView(view);"
 
     commentLines = False
     contentViewSet = False
-    firstBracket = True
 
     with open(fileName, 'r') as codeClass:
         data = codeClass.read()
         activity = False
         fragment = False
         dialog = False
+        firstBracket = True
+        bindingImported = False
+        viewClassImported = viewImport in data
 
-        if 'extends Activity' in data or 'extends AppCompatActivity' in data or 'setContentView' in data:
-            activity = True
+        if bindingName in data:
+            return 0
+
+        if 'extends Activity' in data or 'extends AppCompatActivity' in data:
+            if 'findViewById' in data:
+                activity = True
 
         if 'extends Fragment' in data:
             fragment = False
@@ -84,11 +128,11 @@ def refactorFile(fileName):
                 commentLines = True
                 continue
 
-            if commentLines:
-                continue
-
             if "*/" in j:
                 commentLines = False
+                continue
+
+            if commentLines:
                 continue
 
             if "//" in j or commentLines:
@@ -104,6 +148,7 @@ def refactorFile(fileName):
                         if checkForClass(v):
                             views.append(view[ind + 1])
                             break
+
                 elif len(view) == 2:
                     views.append(view[1])
                 else:
@@ -111,21 +156,35 @@ def refactorFile(fileName):
 
                 viewID = assignment[1].strip().split("findViewById")[1].replace(")","").replace("(R.id.","")
 
-                viewIDs.append(viewID.replace(";",""))
+                viewIDs.append(varNameToCamelCase(viewID.replace(";","")))
 
-                lines[n] = ''
+                lines[n] = ""
 
         for n, e in enumerate(lines):
-            for t, view in enumerate(views):
+            if not viewClassImported:
+                if 'import' in e:
+                    lines[n] = e + "\n" + viewImport
+                    viewClassImported = True
 
-                if e == "{" and firstBracket:
-                    lines[n] = "\n    private " + bindingName + " binding;"
+            if viewClassImported and not bindingImported:
+                if 'import' in e:
+                        lines[n] = e + "\n" + bindingImport + "." + bindingName + ";"
+                        bindingImported = True
+
+            if firstBracket:
+                if "{" in e:
+                    lines[n] = e + "\n    private " + bindingName + " binding;"
                     firstBracket = False
 
-                if ("findViewById" in e) or (view in e and ((not '.' in e) and (not ')' in e) and (not '(' in e))):
+            for t, view in enumerate(views):                
+
+                if view in e and (((not '.' in e) and (not ')' in e) and (not '(' in e))):
                     lines[n] = ''
 
                 elif view in e and ('.' in e):
+                    lines[n] = lines[n].replace(view,"binding."+viewIDs[t])
+
+                elif view in e and ('(' in e and ')' in e) and not 'void' in e:
                     lines[n] = lines[n].replace(view,"binding."+viewIDs[t])
 
     return lines
@@ -175,12 +234,5 @@ for i in xmlFiles:
         writeFile(i,result)
         print("Refactored XML layout: " + i)
 
-for i in javaFiles:
-    # print(i)
-    result = refactorFile(i)
-    print(result)
-    if result == 0:
-        continue
-    else:
-        writeFile(i,result)
-        print("Refactored Java file: " + i)
+
+gradleCleanTask()
