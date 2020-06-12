@@ -27,8 +27,7 @@ packageName = fetchPackageName()
 
 bindingImport = "import " + packageName + ".databinding"
 
-generatedBindingFiles = getFiles(sourcePath + "/app/build/generated/data_binding_base_class_source_out/debug/out/" + packageName + "/databinding", True)
-
+generatedBindingFiles = []
 javaFiles = []
 xmlFiles = []
 
@@ -82,7 +81,7 @@ def varNameToCamelCase(name):
 
 def refactorFile(fileName):
     pth = fileName.split("/")
-    className = pth[len(pth)-1];
+    className = pth[len(pth)-1].replace(".java","");
 
     commentLines = False
     contentViewSet = False
@@ -90,20 +89,24 @@ def refactorFile(fileName):
     with open(fileName, 'r') as codeClass:
         data = codeClass.read()
 
-        bindingName = 'Activity' + className.split('Activity')[0] + 'Binding'
+        bindingName = ""
 
-        if not bindingName + ".java" in generatedBindingFiles:
-            if className + ".java" in generatedBindingFiles:
-                bindingName = className
-
-        setContentView = "        binding = " + bindingName + ".inflate(getLayoutInflater());" + "\n        final View view = binding.getRoot();" + "\n        setContentView(view);"
+        tmp = className + 'Binding'
 
         activity = False
         fragment = False
         dialog = False
+
+        if not tmp in generatedBindingFiles:
+            if 'Activity' in className:
+                tmp = 'Activity' + className.replace('Activity','') + 'Binding'
+            
+        bindingName = tmp
+                
+        setContentView = "        binding = " + bindingName + ".inflate(getLayoutInflater());" + "\n        final View view = binding.getRoot();" + "\n        setContentView(view);"
+
         firstBracket = True
         bindingImported = False
-        viewClassImported = viewImport in data
 
         if bindingName in data:
             return 0
@@ -112,14 +115,16 @@ def refactorFile(fileName):
             if 'findViewById' in data:
                 activity = True
 
-        if 'extends Fragment' in data:
-            fragment = False
+        # if 'extends Fragment' in data:
+        #    fragment = False
 
-        if 'extends Dialog' in data:
-            dialog = False
+        # if 'extends Dialog' in data:
+        #    dialog = False
 
         if not activity and not fragment and not dialog:
             return 0
+
+        viewClassImported = (viewImport in data)
 
         lines = data.split("\n")
 
@@ -234,31 +239,28 @@ def writeFile(path, strlist):
 getFiles(appPath, False)
 
 def doGradleTasks():
-    clean = "./gradlew clean &&"
+    clean = "./gradlew clean"
     build = "./gradlew assembleDebug"
     baseCommand = "cd " + "\"" + sourcePath + "\"" " && chmod +x gradlew && "
 
     print("Cleaning project...\n")
-    outClean = cmdline(baseCommand + clean)
+    outClean = str(cmdline(baseCommand + clean),'utf8')
 
     if ('BUILD SUCCESSFUL' in outClean):
         print("Project has been cleaned successfully\n")
         print("Building project...")
 
-        outBuild = cmdline(baseCommand + build)
+        outBuild = str(cmdline(baseCommand + build),'utf8')
 
         if ('BUILD SUCCESSFUL' in outBuild):
-             print("Project has been built successfully\n")
-             print("Refactoring Java files...\n")
-
-             return 1
+            print("Project has been built successfully\n")
+            print("Refactoring Java files...\n")
+            return 1
         else:
             return 0
     else:
             return 0
-
     
-
 for i in xmlFiles:
     result = removeIgnoreBinding(i)
 
@@ -269,7 +271,7 @@ for i in xmlFiles:
         writeFile(i,result)
         print("Refactored XML layout: " + i)
 
-if doGradleTasks() == 1:
+def refactorClasses():
     for i in javaFiles:
         result = refactorFile(i)
         if result == 0:
@@ -278,3 +280,20 @@ if doGradleTasks() == 1:
         else:
             writeFile(i,result)
             print("Refactored Java file: " + i)
+
+if doGradleTasks() == 1:
+    pkgArray = packageName.split(".")
+
+    pkgPath = ""
+
+    for part in pkgArray:
+        pkgPath = pkgPath + part + "/"
+
+    generatedBindingFiles = getFiles(sourcePath + "/app/build/generated/data_binding_base_class_source_out/debug/out/" + pkgPath + "databinding", True)
+
+    for i in range(0,len(generatedBindingFiles)):
+        generatedBindingFiles[i] = generatedBindingFiles[i].replace(sourcePath + "/app/build/generated/data_binding_base_class_source_out/debug/out/" + pkgPath + "databinding/","").replace(".java","")
+
+    print(generatedBindingFiles)
+
+    refactorClasses()
