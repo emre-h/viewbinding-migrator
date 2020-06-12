@@ -234,5 +234,11 @@ for i in xmlFiles:
         writeFile(i,result)
         print("Refactored XML layout: " + i)
 
-
-gradleCleanTask()
+for i in javaFiles:
+    result = refactorFile(i)
+    if result == 0:
+        print("-")
+        continue
+    else:
+        writeFile(i,result)
+        print("Refactored Java file: " + i)
