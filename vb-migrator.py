@@ -15,6 +15,15 @@ def fetchPackageName():
 
 sourcePath = sys.argv[1]
 
+rebuildProject = True
+
+try:
+    rebuildProject = False if sys.argv[2] == 'false' else True 
+except:
+    rebuildProject = True
+
+print(rebuildProject)
+
 appPath = sourcePath + "/app/src/main"
 
 javaFileType = ".java"
@@ -75,7 +84,13 @@ def checkForClass(name):
 def varNameToCamelCase(name):
     if '_' in name:
         arr = name.split("_")
-        return arr[0] + arr[1].title()
+        result = ""
+        i = 0
+
+        for k in arr:
+            result += k.title() if not i == 0 else k
+            i +=1
+        return result
     else:
         return name
 
@@ -100,23 +115,31 @@ def refactorFile(fileName):
         if not tmp in generatedBindingFiles:
             if 'Activity' in className:
                 tmp = 'Activity' + className.replace('Activity','') + 'Binding'
+
+            elif 'Fragment' in className:
+                tmp = 'Fragment' + className.replace('Fragment','') + 'Binding'
             
         bindingName = tmp
-                
-        setContentView = "        binding = " + bindingName + ".inflate(getLayoutInflater());" + "\n        final View view = binding.getRoot();" + "\n        setContentView(view);"
 
+        setContentView = "        binding = " + bindingName + ".inflate(getLayoutInflater());" + "\n        final View view = binding.getRoot();" + "\n        setContentView(view);"
+        
+        fragmentInflatedView = ''
+        
         firstBracket = True
+        onCreateView = False
+
+        # onCreateViewReturn = False
+
         bindingImported = False
 
         if bindingName in data:
             return 0
 
         if 'extends Activity' in data or 'extends AppCompatActivity' in data:
-            if 'findViewById' in data:
-                activity = True
-
-        # if 'extends Fragment' in data:
-        #    fragment = False
+            activity = True
+                
+        elif 'extends Fragment' in data:
+            fragment = True
 
         # if 'extends Dialog' in data:
         #    dialog = False
@@ -133,10 +156,22 @@ def refactorFile(fileName):
 
         for n, j in enumerate(lines):
 
-            if not contentViewSet:
-                if "setContentView" in j:
-                    lines[n] = setContentView
-
+            if activity:
+                if not contentViewSet:
+                    if 'setContentView' in j:
+                        lines[n] = setContentView
+            elif fragment:
+                if not onCreateView:
+                    if 'onCreateView' in j:
+                        onCreateView = True
+                else:
+                    if fragmentInflatedView == '':
+                        if '.inflate' in j:
+                            infArray = j.split('=')[0].strip().split(" ")
+                            fragmentInflatedView = infArray[len(infArray) - 1]
+                            fragmentBindingView = "        binding = " + bindingName + ".inflate(getLayoutInflater());" + "\n        final View " + fragmentInflatedView + " = binding.getRoot();" + "\n"
+                            lines[n] = fragmentBindingView
+                    
             if "/*" in j:
                 commentLines = True
                 continue
@@ -167,7 +202,7 @@ def refactorFile(fileName):
                 else:
                     views.append(view[0])
 
-                viewID = assignment[1].strip().split("findViewById")[1].replace(")","").replace("(R.id.","")
+                viewID = assignment[1].strip().split("findViewById")[1].replace(")","").replace("(R.id.","").replace("(android.R.id.","")
 
                 viewIDs.append(varNameToCamelCase(viewID.replace(";","")))
 
@@ -181,24 +216,25 @@ def refactorFile(fileName):
 
             if viewClassImported and not bindingImported:
                 if 'import' in e:
-                        lines[n] = e + "\n" + bindingImport + "." + bindingName + ";"
-                        bindingImported = True
+                    lines[n] = e + "\n" + bindingImport + "." + bindingName + ";"
+                    bindingImported = True
 
             if firstBracket:
                 if "{" in e:
                     lines[n] = e + "\n    private " + bindingName + " binding;"
                     firstBracket = False
 
-            for t, view in enumerate(views):                
+            if 'class' in e:
+                continue
 
-                if view in e and (((not '.' in e) and (not ')' in e) and (not '(' in e))):
+            for t, view in enumerate(views):
+                insideCheck = (not viewIDs[t] in view) and (not view in viewIDs[t])
+                
+                if ' ' + view in e and ((not '.' in e) and (not ')' in e) and (not '(' in e)):
                     lines[n] = ''
 
-                elif view in e and ('.' in e):
-                    lines[n] = lines[n].replace(view,"binding."+viewIDs[t])
-
-                elif view in e and ('(' in e and ')' in e) and not 'void' in e:
-                    lines[n] = lines[n].replace(view,"binding."+viewIDs[t])
+                elif insideCheck and (' ' + view in e) or ('.' + view in e) and not ('string.' + view in e) or ('(' + view + ')' in e) and not 'void' in e:
+                    lines[n] = lines[n].replace(view, "binding." + viewIDs[t])
 
     return lines
 
@@ -210,7 +246,6 @@ def removeIgnoreBinding(xmlFile):
         result = []
 
         if ignoreText in data:
-
             splittedData = data.split("\n")
 
             for i in range(0,len(splittedData)):
@@ -239,6 +274,9 @@ def writeFile(path, strlist):
 getFiles(appPath, False)
 
 def doGradleTasks():
+    if not rebuildProject:
+        return 1
+
     clean = "./gradlew clean"
     build = "./gradlew assembleDebug"
     baseCommand = "cd " + "\"" + sourcePath + "\"" " && chmod +x gradlew && "
@@ -273,7 +311,12 @@ for i in xmlFiles:
 
 def refactorClasses():
     for i in javaFiles:
+
+        if not 'FeaturesFragment' in i:
+            continue
+
         result = refactorFile(i)
+
         if result == 0:
             print("Ignored Java file:" + i)
             continue
